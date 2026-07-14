@@ -1,0 +1,13 @@
+# Proprietary data (Global Financial Data / Finaeon) — cannot be redistributed.
+# Present in local copies of the package for journal data editors; see README.
+data/raw/gfd/
+
+# Build intermediates
+data/work/*
+!data/work/.gitkeep
+*.log
+model/figures/*.pkl
+model/.calib_cache_closedform_v1.pkl
+__pycache__/
+
+.DS_Store
