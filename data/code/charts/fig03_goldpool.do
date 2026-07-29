@@ -77,7 +77,7 @@ twoway ///
     xline(`$nixonshock_month', lpattern(dash) lcolor(gs8)) ///
     text(190 `$nixonshock_month' "Nixon Shock", place(e) size(small) color(gs6)) ///
     xline(`$g10float_month', lpattern(dash) lcolor(gs4)) ///
-    text(190 `$g10float_month' "G10 Float", place(e) size(small) color(gs2)) ///
+    text(190 `$g10float_month' "G-10 Float", place(e) size(small) color(gs2)) ///
     xlabel(, labsize(${fontsize}) format(%tmCCYY)) ///
     ylabel(, labsize(${fontsize}) axis(1)) ///
     ylabel(`=ln(35)' "35" `=ln(50)' "50" `=ln(100)' "100" `=ln(200)' "200" , labsize(${fontsize}) axis(2)) ///

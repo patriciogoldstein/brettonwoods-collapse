@@ -42,7 +42,7 @@ legend(order(1 "BEL" 2 "CAN" 3 "FRA" 4 "DEU" 5 "ITA" 6 "JPN" 7 "NLD" 8 "CHE" 9 "
 	text(-1 `${nixonshock_day}' "Nixon Shock", ///
 	place(e) size(medium) color(gs6)) xsize(8) ysize(4) ///
 	xline(`${g10float_day}', lpattern(dash) lcolor(gs4)) ///
-	text(-0.8 `${g10float_day}' "G10 Float", ///
+	text(-0.8 `${g10float_day}' "G-10 Float", ///
 	place(e) size(medium) color(gs2)) ///
     xlabel(, labsize(${fontsize})   format(%tdCCYY) ) ///
     ylabel(, labsize(${fontsize}) )

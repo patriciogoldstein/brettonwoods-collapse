@@ -603,7 +603,7 @@ def _compute_compstatics(params_base: dict,
     scenarios_def = {
         'theta': (r'$\theta$ (US credit growth)',                   theta_vals, theta_labels),
         'mbar':  (r'$\bar m_h^{g^*}$ (reserve limit)',             mbar_vals,  mbar_labels),
-        'ratio': (r'$\Lambda = D_{h0}/(D_{f0} E)$ (relative NDA)', ratio_vals, ratio_labels),
+        'ratio': (r'$\Lambda = D_{h,0}/(E D^*_{f,0})$ (relative NDA)', ratio_vals, ratio_labels),
     }
     param_keys   = {'theta': 'theta', 'mbar': 'm_hgstar_bar', 'ratio': 'ratio'}
     scenarios_def = {k: v for k, v in scenarios_def.items() if v[1] is not None}
@@ -774,31 +774,16 @@ def _compute_size_cs_data(params_cal: dict,
                            force: bool = False,
                            y_vals: list = None) -> tuple:
     """Compute size CS scenarios with disk cache. Returns (y_vals, results_list, params_list)."""
-    if y_vals is None:
-        y_vals = [0.65, 0.70, 0.75, 0.80, 0.85]
-
-    h = _param_hash(params_cal)
-    if not force and cache_path is not None and cache_path.exists():
-        try:
-            with open(cache_path, 'rb') as f:
-                cached = pickle.load(f)
-            if cached.get('param_hash') == h:
-                print('  [cache] Loaded size CS data')
-                return cached['y_vals'], cached['results_list'], cached['params_list']
-        except Exception:
-            pass
-
     y_base    = params_cal['y'];    ystar_base = params_cal['ystar']
     mbar_base = params_cal['m_hgstar_bar']
     # money ratios are scale-invariant — preserve them across size scenarios
     mh0y_base  = params_cal.get('m_h0_over_y',        0.07)
     mf0y_base  = params_cal.get('m_f0star_over_ystar', 0.07)
 
-    results_list = [];  params_list = []
-    for y in y_vals:
-        ystar = 1.0 - y
+    def _scenario_params(y):
         # Scale all level targets proportionally to country size.
         # P_0 = 1 by normalization so Dh0 = dh0 and Df0 = df0 directly.
+        ystar  = 1.0 - y
         dh0_s  = params_cal['dh0']          * y     / y_base
         df0_s  = params_cal['df0']          * ystar / ystar_base
         mbar_s = mbar_base                  * ystar / ystar_base
@@ -811,6 +796,46 @@ def _compute_size_cs_data(params_cal: dict,
                   'Df0':          df0_s,
                   'm_h0_over_y':        mh0y_base,
                   'm_f0star_over_ystar': mf0y_base})
+        return p
+
+    def _T_of_y(y):
+        try:
+            with _quiet():
+                T = solve_T_analytical(_scenario_params(y))
+            return float(T) if np.isfinite(T) else np.nan
+        except Exception:
+            return np.nan
+
+    if y_vals is None:
+        # Same convention as the theta/mbar/ratio grids: middle point = baseline,
+        # upper endpoint = y_crash where the attack is near-immediate (T ~ 0.05).
+        y0 = y_base
+        lo, hi = y0, min(y0 + 0.20, 0.98)
+        for _ in range(40):
+            mid = 0.5 * (lo + hi)
+            T_mid = _T_of_y(mid)
+            if np.isnan(T_mid) or T_mid < 0.05:
+                hi = mid
+            else:
+                lo = mid
+        y_crash = lo
+        d = y_crash - y0
+        y_vals = [y0 - d, y0 - d / 2, y0, y0 + d / 2, y_crash]
+
+    h = _param_hash(params_cal)
+    if not force and cache_path is not None and cache_path.exists():
+        try:
+            with open(cache_path, 'rb') as f:
+                cached = pickle.load(f)
+            if cached.get('param_hash') == h and list(cached.get('y_vals', [])) == list(y_vals):
+                print('  [cache] Loaded size CS data')
+                return cached['y_vals'], cached['results_list'], cached['params_list']
+        except Exception:
+            pass
+
+    results_list = [];  params_list = []
+    for y in y_vals:
+        p = _scenario_params(y)
         print(f'  y={y:.2f}', end='  ')
         try:
             T_ana = solve_T_analytical(p)
@@ -906,6 +931,8 @@ def _plot_size_cs(y_vals, results_list, params_list):
         T = res['T'];  col = COLORS[idx];  lw = LWS[idx];  ls = LS[idx]
         y_val = y_vals[idx];  cstar = prm['cstar']
         lbl = rf'$c=y={y_val:.2f},\;c^*=y^*={1-y_val:.2f}$'
+        if idx == len(y_vals) // 2:   # middle scenario = baseline calibration
+            lbl = rf'Baseline ($c=y={y_val:.2f},\;c^*=y^*={1-y_val:.2f}$)'
         mask = res['tvals_post'] <= x_max
         tp   = res['tvals_pre'];  tqv = res['tvals_post'][mask]
 
@@ -1004,7 +1031,7 @@ def _plot_compstatics_outcomes(cs_data: dict, size_data: tuple,
     scen_meta = [
         ('theta', r'$\theta$'),
         ('mbar',  r'$\bar{m}_h^{g^*} / y^*$'),
-        ('ratio', r'$\Lambda = D_{h0}/(D_{f0} E)$'),
+        ('ratio', r'$\Lambda = D_{h,0}/(E D^*_{f,0})$'),
     ]
 
     for scen_name, xlabel in scen_meta:
@@ -1064,7 +1091,9 @@ def _stata_monthly_to_label(val):
     val = int(round(val))
     year  = 1960 + val // 12
     month = val % 12 + 1
-    return f"{_MONTH_ABBR[month-1]}. {str(year)[2:]}"
+    abbr  = _MONTH_ABBR[month-1]
+    dot   = '' if abbr == 'May' else '.'   # 'May' is the full word, no period
+    return f"{abbr}{dot} {str(year)[2:]}"
 
 
 # ════════════════════════════════════════════════════════════
