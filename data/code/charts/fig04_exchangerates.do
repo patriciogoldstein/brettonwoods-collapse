@@ -15,7 +15,9 @@ global maxyear 1980
 use "$temp/bis_exchangerates_D.dta", clear  
 keep if inrange(date, dmy(1,1,${minyear}), dmy(1,1,${maxyear}))
 replace value = . if date == dmy(23,8,1971) & country_iso3 == "NLD" // Data error unnatural spike in NLD
-gen temp = value if date == dmy(30,4,1971)
+local basedate = dmy(30,4,1971)
+local basedatelab = trim("`: display %tdMon_dd,_CCYY `basedate''")
+gen temp = value if date == `basedate'
 egen base = max(temp), by(country_iso3)
 replace value = ln(value/base)
 twoway ///
@@ -31,7 +33,7 @@ twoway ///
 (line $chartvar date if country_iso3 == "GBR", lcolor($GBRcolor)  $lformat ) ///
 , ///
 legend(order(1 "BEL" 2 "CAN" 3 "FRA" 4 "DEU" 5 "ITA" 6 "JPN" 7 "NLD" 8 "CHE" 9 "SWE" 10 "GBR") size(${fontsize}) ) ///
-    ytitle("Log Dif. vs. Apr 30 1971, LC/USD", size(${fontsize}) )  xtitle("", size(${fontsize}) ) ///
+    ytitle("Log Dif. vs. `basedatelab', LC/USD", size(${fontsize}) )  xtitle("", size(${fontsize}) ) ///
 	xline(`${goldpoolend_day}', lpattern(dash) lcolor(gs4)) ///
 	text(-1 `${goldpoolend_day}' "Gold Pool End", ///
 	place(w) size(medium) color(gs2)) ///
