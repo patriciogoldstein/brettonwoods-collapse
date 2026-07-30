@@ -1156,7 +1156,7 @@ def _plot_multicountry(store: dict, figdir: Path):
                         ha='left', color=col)
 
             # 1971 attack only: extend upward by outstanding forward FX
-            # commitments (Bundesbank forward-dollar book, Coombs 1971).
+            # commitments (Bundesbank forward-dollar book, B330/21812).
             # The ratio is computed in calibration_multi_country.do, in the
             # same units and GDP mode as the dashed data segments; countries
             # without a forwards figure have a missing value and get no marker.

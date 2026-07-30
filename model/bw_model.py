@@ -938,9 +938,9 @@ def load_params(csv_path, country='DEU'):
         'm_f0star_over_ystar':     cal.get('m_f0star_over_ystar'),
         'm_f0star_over_ystar_raw': cal.get('m_f0star_over_ystar_raw'),
         'g_f0':                    cal.get('g_f0'),
-        # Forward FX commitments at the 1971 attack (Coombs 1971), same units
-        # as the mbar_* rows (trend GDP); missing for countries without a
-        # forwards figure. Computed in 07_calibration_multi_country.do.
+        # Forward FX commitments at the 1971 attack (Bundesbank B330/21812),
+        # same units as the mbar_* rows (trend GDP); missing for countries
+        # without a forwards figure. Computed in 07_calibration_multi_country.do.
         'fwd_h_gstar_attack71_trend':   cal.get('fwd_h_gstar_attack71_trend'),
         'H':            50,
         'endtime':      1000,

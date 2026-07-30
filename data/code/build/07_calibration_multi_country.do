@@ -363,6 +363,28 @@ foreach c of local foreignctry {
 local sigma 2
 local rho 0.05
 
+* ----------------------------------------------------------------------------
+* Bundesbank forward-dollar book outstanding at the May 1971 float, in DM mn,
+* by source: FRBNY acting for Bundesbank account 1,961; swaps with German
+* commercial banks 2,227; outright forward purchases 5,628. Scholl memorandum
+* "Bemerkungen zu einigen Wechselkursfragen", 17 May 1971, sec. VIII
+* (Historisches Archiv der Deutschen Bundesbank, B330/21812).
+* Converted at the BIS monthly average DEM/USD of the month preceding the
+* attack (April 1971, the last full month inside the band and the month in
+* which the bulk of the book was written), i.e. the same rate source used
+* throughout the build. Reproduces the USD 2.7 bn reported by Coombs (1971).
+* ----------------------------------------------------------------------------
+local fwd_dmmn_DEU 9816
+
+tempfile precalib
+quietly save `precalib', replace
+use "$temp/bis_exchangerates_M.dta", clear
+foreach c of local foreignctry {
+    qui sum value if country_iso3 == "`c'" & date == ``c'_fxres_prev_date', meanonly
+    local fx_prev_`c' = cond(r(N) == 0, ., r(mean))
+}
+use `precalib', clear
+
 foreach c of local foreignctry {
 
     * c = y
@@ -383,13 +405,15 @@ foreach c of local foreignctry {
     local mbar_a71_trend_`c' = (``c'_fxres_cons_attack71_trend') * `c_`c'_`c''
     local mbar_pv_trend_`c'  = (``c'_fxres_cons_prev_trend')     * `c_`c'_`c''
 
-    * Forward FX commitments at the 1971 attack (USD bn): Bundesbank
-    * forward-dollar book outstanding by May 1971, Coombs (1971)
-    * [coombs_treasury_1971]. No comparable figure for Japan (missing).
-    local coombs_fwd_usdbn_`c' = cond("`c'" == "DEU", 2.7, .)
+    * Forward FX commitments at the 1971 attack (USD bn), converted from the
+    * LCU figure set above at the BIS rate of the month preceding the attack.
+    * Only Germany has an archival figure; other countries stay missing.
+    local fwd_dmmn_`c'  = cond("`c'" == "DEU", `fwd_dmmn_DEU', .)
+    local fwd_usdbn_`c' = `fwd_dmmn_`c'' / `fx_prev_`c'' / 1000
+    di "`c' forwards: LCU mn = `fwd_dmmn_`c'' / FX = `fx_prev_`c'' -> USD bn = `fwd_usdbn_`c''"
 
     * Same units as the mbar_* rows (ratio to trend GDP x y*)
-    local fwd_a71_trend_`c' = `coombs_fwd_usdbn_`c'' / `gdp_usdbn_a71_trend_`c'' * `c_`c'_`c''
+    local fwd_a71_trend_`c' = `fwd_usdbn_`c'' / `gdp_usdbn_a71_trend_`c'' * `c_`c'_`c''
 
     * Initial MB/output ratios at ${yearinit}
     * m_f0star_over_ystar adjusted: subtract non-FX reserves / GDP (g_f0)
