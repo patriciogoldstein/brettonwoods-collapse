@@ -9,7 +9,8 @@ recovers (Dh0, Df0, m̄, α, α*) analytically from four moments — δ_h = d_{h
 scalar root-find in P̃ (the rescaled collapse price), following the paper's
 Calibration Algorithm appendix.  P_0 = 1 normalisation; c = y by construction.
 T_target is inferred from date columns in calibration_values.csv.
-T = 0 corresponds to December 1969 (Stata monthly = 119).
+T = 0 is the end of December 1969 (Stata monthly = 119), i.e. 1 January 1970;
+model time t is measured in years from there.
 E_0 is normalised to 1 (closed-form convention, not imported from CSV).
 
 Attack dates
@@ -197,7 +198,8 @@ def _join(t_pre, y_pre, t_post, y_post):
 def _set_year_ticks(ax, x_max, base_year=1970):
     """Monthly minor ticks; major ticks + labels every 6 months as 'Jan/Jul YYYY'.
 
-    T=0 is Jan 1, 1970, so t=1/12 is end of Jan 1970, t=6/12 is Jul 1970, etc.
+    T=0 is end-December 1969, so t=1/12 is end of Jan 1970, t=6/12 is end of
+    Jun 1970, etc.; the label at t is the month the tick opens.
     """
     from matplotlib.ticker import FixedLocator, FixedFormatter
 
@@ -448,6 +450,8 @@ def step_compstatics(baseline_data: dict = None,
     figs_out   = _plot_compstatics_outcomes(cs_data, size_data, figdir, country, attack)
     step_size_cs(figdir=figdir, show=show, attack=attack, size_data=size_data)
     figs.extend(figs_out)
+
+    _check_compstatics_signs(cs_data, size_data)
 
     if show:
         plt.show()
@@ -983,18 +987,20 @@ def _plot_size_cs(y_vals, results_list, params_list):
     return fig
 
 
+def _attack_size(res: dict, prm: dict) -> float:
+    """Delta = reserve gain at T (positive): CB absorbs capital inflow at attack."""
+    gain = res['reserves_real_post'][0] - res['reserves_real_pre'][-1]
+    return float(gain / prm['cstar'] * 100)
+
+
 def _plot_compstatics_outcomes(cs_data: dict, size_data: tuple,
                                figdir: Path, country: str, attack: str) -> list:
     """4 separate figures: T of crisis (left) and attack size % GDP (right) vs parameter.
 
-    Attack size = drop in real reserves at T (pre-T level minus post-T level).
+    Attack size = jump in the foreign CB's real reserves at T (post-T level minus
+    pre-T level), in % of foreign GDP.
     Panels: theta, mbar, lambda (ratio), size (y).
     """
-    def _attack_size(res, prm):
-        # Delta = reserve gain at T (positive): CB absorbs capital inflow at attack
-        gain = res['reserves_real_post'][0] - res['reserves_real_pre'][-1]
-        return float(gain / prm['cstar'] * 100)
-
     def _make_panel(x_valid, T_vals, size_vals, xlabel, fname, x_decimals=None):
         fig, ax_T = plt.subplots(figsize=(5, 4.0))
         fig.patch.set_facecolor('white');  ax_T.set_facecolor('white')
@@ -1074,11 +1080,74 @@ def _plot_compstatics_outcomes(cs_data: dict, size_data: tuple,
     return figs
 
 
+# Theoretical signs: dT/dparam, and Delta either strictly 'up' or 'flat' to `tol`.
+_CS_SIGNS = {
+    'theta': {'label': 'theta',  'T': -1, 'delta': 'up'},
+    'mbar':  {'label': 'mbar',   'T': +1, 'delta': 'flat', 'tol': 1e-2},
+    'ratio': {'label': 'Lambda', 'T': -1, 'delta': 'flat', 'tol': 1e-6},
+    'size':  {'label': 'y',      'T': -1, 'delta': 'up'},
+}
+
+
+def _check_compstatics_signs(cs_data: dict, size_data: tuple):
+    """Assert the comparative statics in fig10/figA11 carry their theoretical signs."""
+    series = {}
+    for scen_name in ('theta', 'mbar', 'ratio'):
+        if scen_name not in cs_data.get('scenarios', {}):
+            continue
+        trips = [(xv, res['T'], _attack_size(res, prm))
+                 for xv, res, prm in zip(cs_data['scenarios'][scen_name]['values'],
+                                         cs_data['results'][scen_name],
+                                         cs_data['params'][scen_name])
+                 if res is not None and prm is not None]
+        series[scen_name] = trips
+
+    y_vals_s, res_s, prm_s = size_data
+    series['size'] = [(yv, res['T'], _attack_size(res, prm))
+                      for yv, res, prm in zip(y_vals_s, res_s, prm_s)
+                      if res is not None and prm is not None]
+
+    problems = []
+    for scen_name, trips in series.items():
+        spec = _CS_SIGNS[scen_name]
+        if len(trips) < 2:
+            problems.append(f'{spec["label"]}: only {len(trips)} valid scenario(s)')
+            continue
+        trips.sort(key=lambda t: t[0])
+        T = np.array([t[1] for t in trips])
+        D = np.array([t[2] for t in trips])
+
+        if not np.all(np.diff(T) * spec['T'] > 0):
+            arrow = 'increasing' if spec['T'] > 0 else 'decreasing'
+            problems.append(f'{spec["label"]}: T not strictly {arrow} — '
+                            f'T={np.array2string(T, precision=4)}')
+
+        if spec['delta'] == 'up':
+            if not np.all(np.diff(D) > 0):
+                problems.append(f'{spec["label"]}: Delta not strictly increasing — '
+                                f'Delta={np.array2string(D, precision=4)}')
+        else:
+            rel = float(np.ptp(D) / abs(np.mean(D)))
+            if rel > spec['tol']:
+                problems.append(f'{spec["label"]}: Delta varies by {rel:.2e} '
+                                f'(> {spec["tol"]:.0e}) — Delta='
+                                f'{np.array2string(D, precision=6)}')
+
+    if problems:
+        raise AssertionError('comparative statics lost their theoretical signs:\n  '
+                             + '\n  '.join(problems))
+    print(f'  [signs] comparative statics OK ({", ".join(series)})')
+
+
 _MONTH_ABBR = ['Jan','Feb','Mar','Apr','May','Jun',
                'Jul','Aug','Sep','Oct','Nov','Dec']
 
 def _T_to_date_label(T):
-    """Convert model time T (years from Dec 1969) to 'MM/YY' string."""
+    """Convert model time T (years from end-December 1969) to 'MM/YY' string.
+
+    Names the month that ends at T, matching the Stata monthly convention of the
+    data (T=3.25 → 03/73, Stata monthly 158).
+    """
     total = 11 + int(round(T * 12))   # months since Jan 1969
     year  = 1969 + total // 12
     month = total % 12 + 1

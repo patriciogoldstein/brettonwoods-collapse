@@ -604,6 +604,11 @@ def calibrate_closedform(params_in, T_target, verbose=True):
         if not np.isfinite(mb) or mb <= 0:
             return np.nan
 
+        # Home money supply D_{h,0}e^{θu} − P̃m̄ nonpositive at u=0 (its minimum):
+        # the trial is infeasible, and NaN signals that to the bracketing scan.
+        if Dh0 - Ptilde * mb <= 0:
+            return np.nan
+
         # Home post-collapse fixed-point
         lhs = Ptilde ** (-sigma)
 
